@@ -408,20 +408,6 @@ Apache 2.0 — see [LICENSE](LICENSE)
 
 ---
 
-## 🌟 Star History
-
-If you find this useful, consider giving it a star! ⭐
-
----
-
-## 💬 Community
-
-- **Issues**: [Report bugs or request features](../../issues)
-- **Discussions**: [Ask questions or share ideas](../../discussions)
-- **Twitter**: Share your use cases with `#ReasoningBank`
-
----
-
 ## 🚦 Status
 
 - ✅ Core implementation complete
