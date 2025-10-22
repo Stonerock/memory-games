@@ -4,11 +4,17 @@ Optional Graphiti integration.
 Uses Graphiti's temporal knowledge graph for storing and retrieving memory items.
 Set env var RB_STORE=graphiti and configure GRAPHITI_URI, GRAPHITI_USER, GRAPHITI_PASSWORD.
 """
-import os, asyncio
+import os
 from typing import List, Dict, Any
 from datetime import datetime
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
+import nest_asyncio
+
+# Allow nested event loops (needed for sync interface over async library)
+nest_asyncio.apply()
+
+import asyncio
 
 class GraphitiClient:
     def __init__(self):
@@ -19,32 +25,50 @@ class GraphitiClient:
         if not self.password:
             raise RuntimeError("Set GRAPHITI_PASSWORD to use GraphitiClient. Also optionally set GRAPHITI_URI and GRAPHITI_USER.")
 
-        # Initialize Graphiti client
+        # Use OpenAI for both LLM and embeddings (simpler and higher rate limits)
+        if not os.getenv("OPENAI_API_KEY"):
+            raise RuntimeError(
+                "Graphiti requires OPENAI_API_KEY. "
+                "Set OPENAI_API_KEY environment variable to use GraphitiClient."
+            )
+
+        from graphiti_core.llm_client.openai_client import OpenAIClient
+        llm_client = OpenAIClient()
+
+        # Initialize Graphiti client with LLM
+        # It will use OpenAI embeddings by default from OPENAI_API_KEY env var
         self.graphiti = Graphiti(
             uri=self.uri,
             user=self.user,
-            password=self.password
+            password=self.password,
+            llm_client=llm_client
         )
 
-        # Ensure indices are built (run once)
-        asyncio.run(self._ensure_setup())
+        # Setup will be done lazily on first use
+        self._setup_done = False
 
     async def _ensure_setup(self):
         """Ensure database indices and constraints are set up."""
-        try:
-            await self.graphiti.build_indices_and_constraints()
-        except Exception:
-            # May already exist, that's OK
-            pass
+        if not self._setup_done:
+            try:
+                await self.graphiti.build_indices_and_constraints()
+                self._setup_done = True
+            except Exception:
+                # May already exist, that's OK
+                self._setup_done = True
 
     def upsert_memory_items(self, items: List[Dict[str, Any]]) -> None:
         """
         Store memory items as episodes in Graphiti.
         Each memory item becomes an episode with its content.
         """
+        # Use asyncio.run which handles event loop creation/cleanup
         asyncio.run(self._upsert_memory_items_async(items))
 
     async def _upsert_memory_items_async(self, items: List[Dict[str, Any]]) -> None:
+        # Ensure setup is done first
+        await self._ensure_setup()
+
         for item in items:
             # Convert memory item to episode
             title = item.get("title", "Untitled Memory")
@@ -73,6 +97,7 @@ class GraphitiClient:
         Search memory items using Graphiti's hybrid search.
         Returns top_k relevant memory items.
         """
+        # Use asyncio.run which handles event loop creation/cleanup
         return asyncio.run(self._search_async(query, top_k))
 
     async def _search_async(self, query: str, top_k: int) -> List[Dict[str, Any]]:

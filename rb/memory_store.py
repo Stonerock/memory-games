@@ -69,3 +69,8 @@ class MemoryStore:
             sims = cosine_similarity(X[:-1], X[-1])
             ranked = sorted(zip(range(len(data)), sims.flatten()), key=lambda x: x[1], reverse=True)[:top_k]
             return [data[i] for (i, _) in ranked]
+
+    def close(self):
+        """Close connections (only needed for Graphiti)."""
+        if self.use_graphiti:
+            self.graphiti.close()
